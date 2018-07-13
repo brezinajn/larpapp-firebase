@@ -4,8 +4,8 @@ import MessagingPayload = admin.messaging.MessagingPayload
 
 admin.initializeApp()
 
-const environment = "test"
-const TOPIC_NEWS = "news"
+const environment = "stalker2018"
+// const TOPIC_NEWS = "news"
 
 export const stalkerpediaNotification = functions.firestore.document(`/default/${environment}/news/{newsId}`)
     .onCreate(async (snapshot, context) => {
@@ -13,7 +13,7 @@ export const stalkerpediaNotification = functions.firestore.document(`/default/$
 
         const message = notificationFactory(`News update`, news.title)
 
-        return await admin.messaging().sendToTopic(TOPIC_NEWS, message)
+        return await admin.messaging().sendToTopic(environment, message)
     })
 
 
@@ -24,7 +24,7 @@ export const newsNotification = functions.firestore.document(`/default/${environ
         const message = notificationFactory(`Stalkerpedia update`, news.title)
 
         return await admin.messaging()
-            .sendToTopic(TOPIC_NEWS, message)
+            .sendToTopic(environment, message)
     })
 
 
@@ -66,19 +66,21 @@ export const messageNotification = functions.firestore.document(`/default/${envi
             .data()
             .title
 
+
+        const message = snapshot.data()
+
         const deviceIdPromises = (await  admin.firestore()
             .collection(`/default/${environment}/groups/${groupId}/notifications`)
             .get())
             .docs
             .map(docSnapshot => docSnapshot.id)
+            .filter(userId => userId != message.senderId) //don't send notif to sender
             .map(userId => getDeviceIdFromUserId(userId))
 
 
-        const message = snapshot.data()
-
         const pushMessage = notificationFactory(
             `${groupTitle}`,
-            `${message.sender}: ${message.text}`.substr(0, 30).concat("…")
+            getMessageBody(message.sender, message.text)
         )
 
         return Promise.all((await Promise.all(deviceIdPromises))
@@ -89,12 +91,24 @@ export const messageNotification = functions.firestore.document(`/default/${envi
             )))
     })
 
+const TRESHOLD = 130
+function getMessageBody(sender: string, text: string): string{
+    let processedText: string
+    if(text.length > TRESHOLD)
+        processedText = text.substr(0,TRESHOLD).concat("…")
+    else
+        processedText = text
+
+    return `${sender}: ${processedText}`
+}
+
 
 function notificationFactory(title: string, body: string): MessagingPayload {
     return {
         notification: {
             title,
-            body
+            body,
+            sound: "pda"
         }
     }
 }

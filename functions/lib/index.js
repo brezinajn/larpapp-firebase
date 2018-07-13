@@ -11,7 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
-const environment = "test";
+const environment = "stalker2018";
 const TOPIC_NEWS = "news";
 exports.stalkerpediaNotification = functions.firestore.document(`/default/${environment}/news/{newsId}`)
     .onCreate((snapshot, context) => __awaiter(this, void 0, void 0, function* () {
@@ -55,13 +55,14 @@ exports.messageNotification = functions.firestore.document(`/default/${environme
         .get())
         .data()
         .title;
+    const message = snapshot.data();
     const deviceIdPromises = (yield admin.firestore()
         .collection(`/default/${environment}/groups/${groupId}/notifications`)
         .get())
         .docs
         .map(docSnapshot => docSnapshot.id)
+        .filter(userId => userId != message.senderId) //don't send notif to sender
         .map(userId => getDeviceIdFromUserId(userId));
-    const message = snapshot.data();
     const pushMessage = notificationFactory(`${groupTitle}`, `${message.sender}: ${message.text}`.substr(0, 30).concat("…"));
     return Promise.all((yield Promise.all(deviceIdPromises))
         .filter((it) => it)
@@ -71,7 +72,8 @@ function notificationFactory(title, body) {
     return {
         notification: {
             title,
-            body
+            body,
+            sound: "pda"
         }
     };
 }

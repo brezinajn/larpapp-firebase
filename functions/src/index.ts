@@ -4,36 +4,44 @@ import MessagingPayload = admin.messaging.MessagingPayload
 
 admin.initializeApp()
 
-const environment = "stalker2018"
-// const TOPIC_NEWS = "news"
+type NotificationType = "news" | "message" | "invite" | "stalkerpedia"
 
-export const stalkerpediaNotification = functions.firestore.document(`/default/${environment}/news/{newsId}`)
+export const newsNotification = functions.firestore.document(`/default/{environment}/news/{newsId}`)
     .onCreate(async (snapshot, context) => {
+        const environment = context.params.environment
+        if(!environment) throw Error("No environment found")
+
         const news = snapshot.data()
 
-        const message = notificationFactory(`News update`, news.title)
+        const message = notificationFactory(`News update`, news.title, "news", snapshot.id)
 
         return await admin.messaging().sendToTopic(environment, message)
     })
 
 
-export const newsNotification = functions.firestore.document(`/default/${environment}/stalkerpedia/{newsId}`)
+export const stalkerpediaNotification = functions.firestore.document(`/default/{environment}/stalkerpedia/{newsId}`)
     .onCreate(async (snapshot, context) => {
+        const environment = context.params.environment
+        if(!environment) throw Error("No environment found")
+
         const news = snapshot.data()
 
-        const message = notificationFactory(`Stalkerpedia update`, news.title)
+        const message = notificationFactory(`Stalkerpedia update`, news.title, "stalkerpedia", snapshot.id)
 
         return await admin.messaging()
             .sendToTopic(environment, message)
     })
 
 
-export const inviteNotification = functions.firestore.document(`/default/${environment}/users/{userId}/invites/{groupId}`)
+export const inviteNotification = functions.firestore.document(`/default/{environment}/users/{userId}/invites/{groupId}`)
     .onCreate(async (snapshot, context) => {
+        const environment = context.params.environment
+        if(!environment) throw Error("No environment found")
+
         const userId: string = context.params.userId
         // const groupId: string = context.params.groupId
 
-        const deviceId: string | null = await getDeviceIdFromUserId(userId)
+        const deviceId: string | null = await getDeviceIdFromUserId(userId, environment)
 
         if (!deviceId) return null
 
@@ -42,11 +50,11 @@ export const inviteNotification = functions.firestore.document(`/default/${envir
 
         return await admin.messaging().sendToDevice(
             deviceId,
-            notificationFactory("You have new invite", `New invite to group ${groupTitle}`)
+            notificationFactory("You have new invite", `New invite to group ${groupTitle}`, "invite", snapshot.id)
         )
     })
 
-async function getDeviceIdFromUserId(userId: string): Promise<string | null> {
+async function getDeviceIdFromUserId(userId: string, environment: string): Promise<string | null> {
     return (await admin.firestore()
         .collection(`/default/${environment}/deviceTokens`)
         .doc(userId)
@@ -55,8 +63,11 @@ async function getDeviceIdFromUserId(userId: string): Promise<string | null> {
         .value
 }
 
-export const messageNotification = functions.firestore.document(`/default/${environment}/groups/{groupId}/messages/{messageId}`)
+export const messageNotification = functions.firestore.document(`/default/{environment}/groups/{groupId}/messages/{messageId}`)
     .onCreate(async (snapshot, context) => {
+        const environment = context.params.environment
+        if(!environment) throw Error("No environment found")
+
         const groupId: string = context.params.groupId
 
         const groupTitle: string = (await admin.firestore()
@@ -75,12 +86,14 @@ export const messageNotification = functions.firestore.document(`/default/${envi
             .docs
             .map(docSnapshot => docSnapshot.id)
             .filter(userId => userId != message.senderId) //don't send notif to sender
-            .map(userId => getDeviceIdFromUserId(userId))
+            .map(userId => getDeviceIdFromUserId(userId, environment))
 
 
         const pushMessage = notificationFactory(
             `${groupTitle}`,
-            getMessageBody(message.sender, message.text)
+            getMessageBody(message.sender, message.text),
+            "message",
+            groupId
         )
 
         return Promise.all((await Promise.all(deviceIdPromises))
@@ -91,11 +104,11 @@ export const messageNotification = functions.firestore.document(`/default/${envi
             )))
     })
 
-const TRESHOLD = 130
+const THRESHOLD = 130
 function getMessageBody(sender: string, text: string): string{
     let processedText: string
-    if(text.length > TRESHOLD)
-        processedText = text.substr(0,TRESHOLD).concat("…")
+    if(text.length > THRESHOLD)
+        processedText = text.substr(0,THRESHOLD).concat("…")
     else
         processedText = text
 
@@ -103,12 +116,16 @@ function getMessageBody(sender: string, text: string): string{
 }
 
 
-function notificationFactory(title: string, body: string): MessagingPayload {
+function notificationFactory(title: string, body: string, type: NotificationType, key: string): MessagingPayload {
     return {
         notification: {
             title,
             body,
             sound: "pda"
+        },
+        data: {
+            type,
+            key
         }
     }
 }

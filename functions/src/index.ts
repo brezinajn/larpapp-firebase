@@ -4,7 +4,7 @@ import MessagingPayload = admin.messaging.MessagingPayload
 
 admin.initializeApp()
 
-type NotificationType = "news" | "message" | "invite" | "stalkerpedia"
+type NotificationType = "news" | "message" | "invite" | "encyclopedia"
 
 export const newsNotification = functions.firestore.document(`/default/{environment}/news/{newsId}`)
     .onCreate(async (snapshot, context) => {
@@ -19,14 +19,14 @@ export const newsNotification = functions.firestore.document(`/default/{environm
     })
 
 
-export const stalkerpediaNotification = functions.firestore.document(`/default/{environment}/stalkerpedia/{newsId}`)
+export const encyclopediaNotification = functions.firestore.document(`/default/{environment}/encyclopedia/{newsId}`)
     .onCreate(async (snapshot, context) => {
         const environment = context.params.environment
         if(!environment) throw Error("No environment found")
 
         const news = snapshot.data()
 
-        const message = notificationFactory(`Stalkerpedia update`, news.title, "stalkerpedia", snapshot.id)
+        const message = notificationFactory(`Encyclopedia update`, news.title, "encyclopedia", snapshot.id)
 
         return await admin.messaging()
             .sendToTopic(environment, message)

@@ -85,13 +85,13 @@ export const messageNotification = functions.firestore.document(`/default/{envir
             .get())
             .docs
             .map(docSnapshot => docSnapshot.id)
-            .filter(userId => userId != message.senderId) //don't send notif to sender
+            .filter(userId => userId != message.owner) //don't send notif to sender
             .map(userId => getDeviceIdFromUserId(userId, environment))
 
 
         const pushMessage = notificationFactory(
             `${groupTitle}`,
-            getMessageBody(message.sender, message.text),
+            getMessageBody(message.senderName, message.text),
             "message",
             groupId
         )
